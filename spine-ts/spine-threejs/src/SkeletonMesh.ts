@@ -27,10 +27,10 @@
  * SPINE RUNTIMES, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
+import * as THREE from "three";
 import {
 	AnimationState,
 	AnimationStateData,
-	BlendMode,
 	ClippingAttachment,
 	Color,
 	MeshAttachment,
@@ -40,69 +40,26 @@ import {
 	Skeleton,
 	SkeletonClipping,
 	SkeletonData,
-	TextureAtlasRegion,
 	Utils,
 	Vector2,
 } from "@esotericsoftware/spine-core";
+
 import { MeshBatcher } from "./MeshBatcher.js";
-import * as THREE from "three";
 import { ThreeJsTexture } from "./ThreeJsTexture.js";
+import { Material } from "three";
 
-export type SkeletonMeshMaterialParametersCustomizer = (
-	materialParameters: THREE.ShaderMaterialParameters
-) => void;
-
-export class SkeletonMeshMaterial extends THREE.ShaderMaterial {
-	constructor (customizer: SkeletonMeshMaterialParametersCustomizer) {
-		let vertexShader = `
-			attribute vec4 color;
-			varying vec2 vUv;
-			varying vec4 vColor;
-			void main() {
-				vUv = uv;
-				vColor = color;
-				gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0);
-			}
-		`;
-		let fragmentShader = `
-			uniform sampler2D map;
-			#ifdef USE_SPINE_ALPHATEST
-			uniform float alphaTest;
-			#endif
-			varying vec2 vUv;
-			varying vec4 vColor;
-			void main(void) {
-				gl_FragColor = texture2D(map, vUv)*vColor;
-				#ifdef USE_SPINE_ALPHATEST
-				if (gl_FragColor.a < alphaTest) discard;
-				#endif
-			}
-		`;
-
-		let parameters: THREE.ShaderMaterialParameters = {
-			uniforms: {
-				map: { value: null },
-			},
-			vertexShader: vertexShader,
-			fragmentShader: fragmentShader,
-			side: THREE.DoubleSide,
-			transparent: true,
-			depthWrite: true,
-			alphaTest: 0.0,
-		};
-		customizer(parameters);
-		if (parameters.alphaTest && parameters.alphaTest > 0) {
-			parameters.defines = { USE_SPINE_ALPHATEST: 1 };
-			if (!parameters.uniforms) parameters.uniforms = {};
-			parameters.uniforms["alphaTest"] = { value: parameters.alphaTest };
-		}
-		super(parameters);
-		// non-pma textures are premultiply on upload, so we set premultipliedAlpha to true
-		this.premultipliedAlpha = true;
-	}
-}
+type SkeletonMeshMaterialParametersCustomizer = (materialParameters: THREE.MaterialParameters) => void;
 
 export class SkeletonMesh extends THREE.Object3D {
+	public static readonly DEFAULT_MATERIAL_PARAMETERS: THREE.MaterialParameters = {
+		side: THREE.DoubleSide,
+		transparent: true,
+		depthWrite: true,
+		alphaTest: 0.0,
+		premultipliedAlpha: true,
+		vertexColors: true,
+	}
+
 	tempPos: Vector2 = new Vector2();
 	tempUv: Vector2 = new Vector2();
 	tempLight = new Color();
@@ -112,6 +69,7 @@ export class SkeletonMesh extends THREE.Object3D {
 	zOffset: number = 0.1;
 
 	private batches = new Array<MeshBatcher>();
+	private materialFactory: (parameters: THREE.MaterialParameters) => Material;
 	private nextBatchIndex = 0;
 	private clipper: SkeletonClipping = new SkeletonClipping();
 
@@ -121,17 +79,67 @@ export class SkeletonMesh extends THREE.Object3D {
 	private vertices = Utils.newFloatArray(1024);
 	private tempColor = new Color();
 
+	private _castShadow = false;
+	private _receiveShadow = false;
+
+	constructor (configuration: { skeletonData: SkeletonData, materialFactory?: (parameters: THREE.MaterialParameters) => Material })
+	/**
+	 * @deprecated TODO
+	 *
+	 * @param skeletonData
+	 * @param materialCustomizer
+	 */
 	constructor (
 		skeletonData: SkeletonData,
-		private materialCustomerizer: SkeletonMeshMaterialParametersCustomizer = (
-			material
-		) => { }
+		materialCustomizer: SkeletonMeshMaterialParametersCustomizer,
+	)
+	constructor (
+		skeletonDataOrConfiguration: SkeletonData | { skeletonData: SkeletonData, materialFactory?: (parameters: THREE.MaterialParameters) => Material },
+		materialCustomizer: SkeletonMeshMaterialParametersCustomizer = () => { }
 	) {
 		super();
 
-		this.skeleton = new Skeleton(skeletonData);
-		let animData = new AnimationStateData(skeletonData);
+		if (!('skeletonData' in skeletonDataOrConfiguration)) {
+			const materialFactory = () => {
+				const parameters: THREE.MaterialParameters = { ...SkeletonMesh.DEFAULT_MATERIAL_PARAMETERS };
+				materialCustomizer(parameters);
+				return new THREE.MeshBasicMaterial(parameters);
+			};
+			skeletonDataOrConfiguration = {
+				skeletonData: skeletonDataOrConfiguration,
+				materialFactory,
+			}
+		}
+
+		this.materialFactory = skeletonDataOrConfiguration.materialFactory ?? (() => new THREE.MeshStandardMaterial(SkeletonMesh.DEFAULT_MATERIAL_PARAMETERS));
+		this.skeleton = new Skeleton(skeletonDataOrConfiguration.skeletonData);
+		let animData = new AnimationStateData(skeletonDataOrConfiguration.skeletonData);
 		this.state = new AnimationState(animData);
+
+		Object.defineProperty(this, 'castShadow', {
+            get: () => this._castShadow,
+            set: (value: boolean) => {
+                this._castShadow = value;
+                this.traverse((child) => {
+					if (child instanceof MeshBatcher) {
+                        child.castShadow = value;
+					}
+                });
+            },
+        });
+
+		Object.defineProperty(this, 'receiveShadow', {
+            get: () => this._receiveShadow,
+            set: (value: boolean) => {
+                this._receiveShadow = value;
+                // Propagate to children
+                this.traverse((child) => {
+					if (child instanceof MeshBatcher) {
+                        child.receiveShadow = value;
+					}
+                });
+            },
+        });
 	}
 
 	update (deltaTime: number) {
@@ -162,7 +170,7 @@ export class SkeletonMesh extends THREE.Object3D {
 
 	private nextBatch () {
 		if (this.batches.length == this.nextBatchIndex) {
-			let batch = new MeshBatcher(10920, this.materialCustomerizer);
+			let batch = new MeshBatcher(MeshBatcher.MAX_VERTICES, this.materialFactory);
 			this.add(batch);
 			this.batches.push(batch);
 		}
@@ -174,8 +182,6 @@ export class SkeletonMesh extends THREE.Object3D {
 	private updateGeometry () {
 		this.clearBatches();
 
-		let tempPos = this.tempPos;
-		let tempUv = this.tempUv;
 		let tempLight = this.tempLight;
 		let tempDark = this.tempDark;
 		let clipper = this.clipper;

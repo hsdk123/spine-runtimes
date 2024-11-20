@@ -42,6 +42,10 @@ export class ThreeJsTexture extends Texture {
 		// if the texture is not pma, we ask to threejs to premultiply on upload
 		this.texture.premultiplyAlpha = !pma;
 		this.texture.flipY = false;
+
+		// this is necessary in future versions of ThreeJS
+		this.texture.colorSpace = THREE.SRGBColorSpace;
+
 		this.texture.needsUpdate = true;
 	}
 

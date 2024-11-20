@@ -27,12 +27,16 @@
  * SPINE RUNTIMES, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-import { SkeletonMeshMaterial, SkeletonMeshMaterialParametersCustomizer } from "./SkeletonMesh.js";
 import * as THREE from "three"
+
 import { ThreeJsTexture, ThreeBlendOptions } from "./ThreeJsTexture.js";
 import { BlendMode } from "@esotericsoftware/spine-core";
+import { SkeletonMesh } from "./SkeletonMesh.js";
 
+type MaterialWithMap = THREE.Material & { map: THREE.Texture | null };
 export class MeshBatcher extends THREE.Mesh {
+	public static MAX_VERTICES = 10920;
+
 	private static VERTEX_SIZE = 9;
 	private vertexBuffer: THREE.InterleavedBuffer;
 	private vertices: Float32Array;
@@ -41,9 +45,9 @@ export class MeshBatcher extends THREE.Mesh {
 	private indicesLength = 0;
 	private materialGroups: [number, number, number][] = [];
 
-	constructor (maxVertices: number = 10920, private materialCustomizer: SkeletonMeshMaterialParametersCustomizer = (parameters) => { }) {
+	constructor (maxVertices: number = MeshBatcher.MAX_VERTICES, private materialFactory: (parameters: THREE.MaterialParameters) => THREE.Material) {
 		super();
-		if (maxVertices > 10920) throw new Error("Can't have more than 10920 triangles per batch: " + maxVertices);
+		if (maxVertices > MeshBatcher.MAX_VERTICES) throw new Error("Can't have more than 10920 triangles per batch: " + maxVertices);
 		let vertices = this.vertices = new Float32Array(maxVertices * MeshBatcher.VERTEX_SIZE);
 		let indices = this.indices = new Uint16Array(maxVertices * 3);
 		let geo = new THREE.BufferGeometry();
@@ -57,7 +61,7 @@ export class MeshBatcher extends THREE.Mesh {
 		geo.drawRange.start = 0;
 		geo.drawRange.count = 0;
 		this.geometry = geo;
-		this.material = [new SkeletonMeshMaterial(materialCustomizer)];
+		this.material = [];
 	}
 
 	dispose () {
@@ -80,13 +84,13 @@ export class MeshBatcher extends THREE.Mesh {
 		geo.clearGroups();
 		this.materialGroups = [];
 		if (this.material instanceof THREE.Material) {
-			const meshMaterial = this.material as SkeletonMeshMaterial;
-			meshMaterial.uniforms.map.value = null;
+			const meshMaterial = this.material as MaterialWithMap;
+			meshMaterial.map = null;
 			meshMaterial.blending = THREE.NormalBlending;
 		} else if (Array.isArray(this.material)) {
 			for (let i = 0; i < this.material.length; i++) {
-				const meshMaterial = this.material[i] as SkeletonMeshMaterial;
-				meshMaterial.uniforms.map.value = null;
+				const meshMaterial = this.material[i] as MaterialWithMap;
+				meshMaterial.map = null;
 				meshMaterial.blending = THREE.NormalBlending;
 			}
 		}
@@ -167,14 +171,14 @@ export class MeshBatcher extends THREE.Mesh {
 
 		if (Array.isArray(this.material)) {
 			for (let i = 0; i < this.material.length; i++) {
-				const meshMaterial = this.material[i] as SkeletonMeshMaterial;
+				const meshMaterial = this.material[i] as MaterialWithMap;
 
-				if (!meshMaterial.uniforms.map.value) {
+				if (!meshMaterial.map) {
 					updateMeshMaterial(meshMaterial, slotTexture, blendingObject);
 					return i;
 				}
 
-				if (meshMaterial.uniforms.map.value === slotTexture
+				if (meshMaterial.map === slotTexture
 					&& blendingObject.blending === meshMaterial.blending
 					&& (blendingObject.blendSrc === undefined || blendingObject.blendSrc === meshMaterial.blendSrc)
 					&& (blendingObject.blendDst === undefined || blendingObject.blendDst === meshMaterial.blendDst)
@@ -185,8 +189,13 @@ export class MeshBatcher extends THREE.Mesh {
 				}
 			}
 
-			const meshMaterial = new SkeletonMeshMaterial(this.materialCustomizer);
-			updateMeshMaterial(meshMaterial, slotTexture, blendingObject);
+			const meshMaterial = this.materialFactory(SkeletonMesh.DEFAULT_MATERIAL_PARAMETERS);
+
+			if (!('map' in meshMaterial)) {
+				throw new Error("The material factory must return a material having the map property for the texture.");
+			}
+
+			updateMeshMaterial(meshMaterial as MaterialWithMap, slotTexture, blendingObject);
 			this.material.push(meshMaterial);
 			group = this.material.length - 1;
 		} else {
@@ -197,8 +206,8 @@ export class MeshBatcher extends THREE.Mesh {
 	}
 }
 
-function updateMeshMaterial (meshMaterial: SkeletonMeshMaterial, slotTexture: THREE.Texture, blending: ThreeBlendOptions) {
-	meshMaterial.uniforms.map.value = slotTexture;
+function updateMeshMaterial (meshMaterial: MaterialWithMap, slotTexture: THREE.Texture, blending: ThreeBlendOptions) {
+	meshMaterial.map = slotTexture;
 	Object.assign(meshMaterial, blending);
 	meshMaterial.needsUpdate = true;
 }
