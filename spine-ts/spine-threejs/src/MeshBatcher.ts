@@ -37,7 +37,9 @@ type MaterialWithMap = THREE.Material & { map: THREE.Texture | null };
 export class MeshBatcher extends THREE.Mesh {
 	public static MAX_VERTICES = 10920;
 
-	private static VERTEX_SIZE = 9;
+	// private static VERTEX_SIZE = 9;
+	private static VERTEX_SIZE = 13;
+	private vertexSize = 9;
 	private vertexBuffer: THREE.InterleavedBuffer;
 	private vertices: Float32Array;
 	private verticesLength = 0;
@@ -45,17 +47,29 @@ export class MeshBatcher extends THREE.Mesh {
 	private indicesLength = 0;
 	private materialGroups: [number, number, number][] = [];
 
-	constructor (maxVertices: number = MeshBatcher.MAX_VERTICES, private materialFactory: (parameters: THREE.MaterialParameters) => THREE.Material) {
+	constructor (
+			maxVertices: number = MeshBatcher.MAX_VERTICES,
+			private materialFactory: (parameters: THREE.MaterialParameters) => THREE.Material,
+			private twoColorTint = true,
+		) {
 		super();
 		if (maxVertices > MeshBatcher.MAX_VERTICES) throw new Error("Can't have more than 10920 triangles per batch: " + maxVertices);
-		let vertices = this.vertices = new Float32Array(maxVertices * MeshBatcher.VERTEX_SIZE);
+
+		if (twoColorTint) {
+			this.vertexSize += 4;
+		}
+
+		let vertices = this.vertices = new Float32Array(maxVertices * this.vertexSize);
 		let indices = this.indices = new Uint16Array(maxVertices * 3);
 		let geo = new THREE.BufferGeometry();
-		let vertexBuffer = this.vertexBuffer = new THREE.InterleavedBuffer(vertices, MeshBatcher.VERTEX_SIZE);
+		let vertexBuffer = this.vertexBuffer = new THREE.InterleavedBuffer(vertices, this.vertexSize);
 		vertexBuffer.usage = WebGLRenderingContext.DYNAMIC_DRAW;
 		geo.setAttribute("position", new THREE.InterleavedBufferAttribute(vertexBuffer, 3, 0, false));
 		geo.setAttribute("color", new THREE.InterleavedBufferAttribute(vertexBuffer, 4, 3, false));
 		geo.setAttribute("uv", new THREE.InterleavedBufferAttribute(vertexBuffer, 2, 7, false));
+		if (twoColorTint) {
+			geo.setAttribute("darkcolor", new THREE.InterleavedBufferAttribute(vertexBuffer, 4, 9, false));
+		}
 		geo.setIndex(new THREE.BufferAttribute(indices, 1));
 		geo.getIndex()!.usage = WebGLRenderingContext.DYNAMIC_DRAW;
 		geo.drawRange.start = 0;
@@ -104,25 +118,54 @@ export class MeshBatcher extends THREE.Mesh {
 
 	canBatch (numVertices: number, numIndices: number) {
 		if (this.indicesLength + numIndices >= this.indices.byteLength / 2) return false;
-		if (this.verticesLength / MeshBatcher.VERTEX_SIZE + numVertices >= (this.vertices.byteLength / 4) / MeshBatcher.VERTEX_SIZE) return false;
+		if (this.verticesLength / this.vertexSize + numVertices >= (this.vertices.byteLength / 4) / this.vertexSize) return false;
 		return true;
 	}
 
 	batch (vertices: ArrayLike<number>, verticesLength: number, indices: ArrayLike<number>, indicesLength: number, z: number = 0) {
-		let indexStart = this.verticesLength / MeshBatcher.VERTEX_SIZE;
+		let indexStart = this.verticesLength / this.vertexSize;
 		let vertexBuffer = this.vertices;
 		let i = this.verticesLength;
 		let j = 0;
-		for (; j < verticesLength;) {
-			vertexBuffer[i++] = vertices[j++];
-			vertexBuffer[i++] = vertices[j++];
-			vertexBuffer[i++] = z;
-			vertexBuffer[i++] = vertices[j++];
-			vertexBuffer[i++] = vertices[j++];
-			vertexBuffer[i++] = vertices[j++];
-			vertexBuffer[i++] = vertices[j++];
-			vertexBuffer[i++] = vertices[j++];
-			vertexBuffer[i++] = vertices[j++];
+		if (this.twoColorTint) {
+			for (; j < verticesLength;) {
+				vertexBuffer[i++] = vertices[j++];  // x
+				vertexBuffer[i++] = vertices[j++];  // y
+				vertexBuffer[i++] = z;				// z
+
+				vertexBuffer[i++] = vertices[j++];  // r
+				vertexBuffer[i++] = vertices[j++];  // g
+				vertexBuffer[i++] = vertices[j++];  // b
+				vertexBuffer[i++] = vertices[j++];  // a
+
+				vertexBuffer[i++] = vertices[j++];  // u
+				vertexBuffer[i++] = vertices[j++];  // v
+
+				vertexBuffer[i++] = vertices[j++];  // r
+				vertexBuffer[i-1] = 1;
+				vertexBuffer[i++] = vertices[j++];  // g
+				vertexBuffer[i-1] = 1;
+				vertexBuffer[i++] = vertices[j++];  // b
+				vertexBuffer[i-1] = 1;
+				vertexBuffer[i++] = vertices[j++];  // a
+				vertexBuffer[i-1] = 1;
+
+
+			}
+		} else {
+			for (; j < verticesLength;) {
+				vertexBuffer[i++] = vertices[j++];  // x
+				vertexBuffer[i++] = vertices[j++];  // y
+				vertexBuffer[i++] = z;				// z
+
+				vertexBuffer[i++] = vertices[j++];  // r
+				vertexBuffer[i++] = vertices[j++];  // g
+				vertexBuffer[i++] = vertices[j++];  // b
+				vertexBuffer[i++] = vertices[j++];  // a
+
+				vertexBuffer[i++] = vertices[j++];  // u
+				vertexBuffer[i++] = vertices[j++];  // v
+			}
 		}
 		this.verticesLength = i;
 
@@ -190,10 +233,95 @@ export class MeshBatcher extends THREE.Mesh {
 			}
 
 			const meshMaterial = this.materialFactory(SkeletonMesh.DEFAULT_MATERIAL_PARAMETERS);
+			// meshMaterial.premultipliedAlpha = false;
+			console.log(meshMaterial);
 
 			if (!('map' in meshMaterial)) {
 				throw new Error("The material factory must return a material having the map property for the texture.");
 			}
+
+
+			// meshMaterial.onBeforeCompile = ( shader ) => {
+
+			// 	if (this.twoColorTint) {
+			// 		meshMaterial.defines = {
+			// 			...meshMaterial.defines,
+			// 			USE_SPINE_DARK_TINT: 1,
+			// 		}
+			// 	}
+
+			// 	// vec4 texColor = texture2D(u_texture, v_texCoords);
+			// 	// gl_FragColor.a = texColor.a * v_light.a;
+			// 	// gl_FragColor.rgb = ((texColor.a - 1.0) * v_dark.a + 1.0 - texColor.rgb) * v_dark.rgb + texColor.rgb * v_light.rgb;
+
+			// 	shader.vertexShader = "attribute vec4 darkcolor;\n" + shader.vertexShader;
+			// 	shader.vertexShader = shader.vertexShader.replace(
+			// 		'#include <color_pars_vertex>',
+			// 		[
+			// 			"#if defined( USE_COLOR_ALPHA )",
+			// 			"	varying vec4 vColor;",
+			// 			"	varying vec4 v_dark;",
+			// 			"#endif",
+			// 		].join( '\n' )
+			// 	);
+
+			// 	shader.vertexShader = shader.vertexShader.replace(
+			// 		'#include <color_vertex>',
+			// 		[
+			// 			"#if defined( USE_COLOR_ALPHA )",
+			// 			"	vColor = vec4( 1.0 );",
+			// 			"	vColor *= color;",
+			// 			"	v_dark = vec4( 1.0 );",
+			// 			"	v_dark *= darkcolor;",
+			// 			"#endif",
+			// 		].join( '\n' )
+			// 	);
+
+			// 	// console.log(shader.vertexShader);
+
+
+
+			// 	shader.fragmentShader = shader.fragmentShader.replace(
+			// 		'#include <color_pars_fragment>',
+			// 		[
+			// 			"#if defined( USE_COLOR_ALPHA )",
+			// 			"	varying vec4 vColor;",
+			// 			"	varying vec4 v_dark;",
+			// 			"#endif",
+			// 		].join( '\n' )
+			// 	);
+
+			// 	shader.fragmentShader = shader.fragmentShader.replace(
+			// 		'#include <color_fragment>',
+			// 		[
+			// 			"#ifdef USE_SPINE_DARK_TINT",
+
+			// 			"	#ifdef USE_COLOR_ALPHA",
+			// 			"	        diffuseColor.a *= vColor.a;",
+			// 			"	        diffuseColor.rgb *= ((diffuseColor.a - 1.0) * v_dark.a + 1.0 - diffuseColor.rgb) * v_dark.rgb + diffuseColor.rgb * vColor.rgb;",
+			// 			"	#endif",
+
+			// 			"#else",
+			// 			"	#ifdef USE_COLOR_ALPHA",
+			// 			"	        diffuseColor *= vColor;",
+			// 			"	#endif",
+
+			// 			"#endif",
+			// 		].join( '\n' )
+			// 	);
+
+			// 	// shader.fragmentShader = shader.fragmentShader.replace(
+			// 	// 	'#include <premultiplied_alpha_fragment>',
+			// 	// 	[
+			// 	// 		"#ifdef PREMULTIPLIED_ALPHA",
+			// 	// 		"        gl_FragColor.rgb *= 0.1;",
+			// 	// 		"    #endif",
+			// 	// 	].join( '\n' )
+			// 	// );
+			// 	console.log(shader.fragmentShader);
+
+			// }
+
 
 			updateMeshMaterial(meshMaterial as MaterialWithMap, slotTexture, blendingObject);
 			this.material.push(meshMaterial);

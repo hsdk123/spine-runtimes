@@ -45,6 +45,13 @@
       let controls;
       let lastFrameTime = Date.now() / 1000;
 
+        let pma = true;
+
+        // let baseUrl = "assets/";
+        // let skeletonFile = "raptor-pro.json";
+        // let atlasFile = "raptor.atlas";
+        // let animation = "walk";
+
       let baseUrl = "assets/";
       let skeletonFile = "raptor-pro.json";
       let atlasFile = "raptor.atlas";
@@ -111,10 +118,10 @@
         plane.receiveShadow = true
         scene.add(plane)
 
-        // load the assets required to display the Raptor model
-        assetManager = new spine.AssetManager(baseUrl);
-        assetManager.loadText(skeletonFile);
-        assetManager.loadTextureAtlas(atlasFile);
+          // load the assets required to display the Raptor model
+          assetManager = new spine.AssetManager(baseUrl, undefined, pma);
+          assetManager.loadText(skeletonFile);
+          assetManager.loadTextureAtlas(atlasFile);
 
         assetManager.loadText(skeletonFile2);
         assetManager.loadTextureAtlas(atlasFile2);

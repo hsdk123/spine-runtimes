@@ -49,14 +49,19 @@ import { ThreeJsTexture } from "./ThreeJsTexture.js";
 import { Material } from "three";
 
 type SkeletonMeshMaterialParametersCustomizer = (materialParameters: THREE.MaterialParameters) => void;
+type SkeletonMeshConfiguration = {
+	skeletonData: SkeletonData,
+	materialFactory?: (parameters: THREE.MaterialParameters) => Material,
+	twoColorTint?: boolean,
+};
 
 export class SkeletonMesh extends THREE.Object3D {
 	public static readonly DEFAULT_MATERIAL_PARAMETERS: THREE.MaterialParameters = {
 		side: THREE.DoubleSide,
 		transparent: true,
 		depthWrite: true,
-		alphaTest: 0.0,
-		premultipliedAlpha: true,
+		alphaTest: 0.001,
+		premultipliedAlpha: false,
 		vertexColors: true,
 	}
 
@@ -75,14 +80,17 @@ export class SkeletonMesh extends THREE.Object3D {
 
 	static QUAD_TRIANGLES = [0, 1, 2, 2, 3, 0];
 	static VERTEX_SIZE = 2 + 2 + 4;
+	private vertexSize = 2 + 2 + 4;
+	private twoColorTint = true;
 
 	private vertices = Utils.newFloatArray(1024);
 	private tempColor = new Color();
+	private tempDarkColor = new Color();
 
 	private _castShadow = false;
 	private _receiveShadow = false;
 
-	constructor (configuration: { skeletonData: SkeletonData, materialFactory?: (parameters: THREE.MaterialParameters) => Material })
+	constructor (configuration: SkeletonMeshConfiguration)
 	/**
 	 * @deprecated TODO
 	 *
@@ -94,7 +102,7 @@ export class SkeletonMesh extends THREE.Object3D {
 		materialCustomizer: SkeletonMeshMaterialParametersCustomizer,
 	)
 	constructor (
-		skeletonDataOrConfiguration: SkeletonData | { skeletonData: SkeletonData, materialFactory?: (parameters: THREE.MaterialParameters) => Material },
+		skeletonDataOrConfiguration: SkeletonData | SkeletonMeshConfiguration,
 		materialCustomizer: SkeletonMeshMaterialParametersCustomizer = () => { }
 	) {
 		super();
@@ -111,6 +119,10 @@ export class SkeletonMesh extends THREE.Object3D {
 			}
 		}
 
+		this.twoColorTint = skeletonDataOrConfiguration.twoColorTint ?? true;
+		if (this.twoColorTint) {
+			this.vertexSize += 4;
+		}
 		this.materialFactory = skeletonDataOrConfiguration.materialFactory ?? (() => new THREE.MeshStandardMaterial(SkeletonMesh.DEFAULT_MATERIAL_PARAMETERS));
 		this.skeleton = new Skeleton(skeletonDataOrConfiguration.skeletonData);
 		let animData = new AnimationStateData(skeletonDataOrConfiguration.skeletonData);
@@ -170,7 +182,7 @@ export class SkeletonMesh extends THREE.Object3D {
 
 	private nextBatch () {
 		if (this.batches.length == this.nextBatchIndex) {
-			let batch = new MeshBatcher(MeshBatcher.MAX_VERTICES, this.materialFactory);
+			let batch = new MeshBatcher(MeshBatcher.MAX_VERTICES, this.materialFactory, this.twoColorTint);
 			this.add(batch);
 			this.batches.push(batch);
 		}
@@ -195,7 +207,7 @@ export class SkeletonMesh extends THREE.Object3D {
 		let z = 0;
 		let zOffset = this.zOffset;
 		for (let i = 0, n = drawOrder.length; i < n; i++) {
-			let vertexSize = clipper.isClipping() ? 2 : SkeletonMesh.VERTEX_SIZE;
+			let vertexSize = clipper.isClipping() ? 2 : this.vertexSize;
 			let slot = drawOrder[i];
 			if (!slot.bone.active) {
 				clipper.clipEndWithSlot(slot);
@@ -255,6 +267,16 @@ export class SkeletonMesh extends THREE.Object3D {
 					alpha
 				);
 
+				let darkColor = this.tempDarkColor;
+				if (!slot.darkColor)
+					darkColor.set(0, 0, 0, 1.0);
+				else {
+					darkColor.r = slot.darkColor.r * color.a;
+					darkColor.g = slot.darkColor.g * color.a;
+					darkColor.b = slot.darkColor.b * color.a;
+					darkColor.a = 1.0;
+				}
+
 				let finalVertices: NumberArrayLike;
 				let finalVerticesLength: number;
 				let finalIndices: NumberArrayLike;
@@ -268,7 +290,7 @@ export class SkeletonMesh extends THREE.Object3D {
 						uvs,
 						color,
 						tempLight,
-						false
+						this.twoColorTint,
 					);
 					let clippedVertices = clipper.clippedVertices;
 					let clippedTriangles = clipper.clippedTriangles;
@@ -278,18 +300,30 @@ export class SkeletonMesh extends THREE.Object3D {
 					finalIndicesLength = clippedTriangles.length;
 				} else {
 					let verts = vertices;
-					for (
-						let v = 2, u = 0, n = numFloats;
-						v < n;
-						v += vertexSize, u += 2
-					) {
-						verts[v] = color.r;
-						verts[v + 1] = color.g;
-						verts[v + 2] = color.b;
-						verts[v + 3] = color.a;
-						verts[v + 4] = uvs[u];
-						verts[v + 5] = uvs[u + 1];
+					if (!this.twoColorTint) {
+						for (let v = 2, u = 0, n = numFloats; v < n; v += vertexSize, u += 2) {
+							verts[v] = color.r;
+							verts[v + 1] = color.g;
+							verts[v + 2] = color.b;
+							verts[v + 3] = color.a;
+							verts[v + 4] = uvs[u];
+							verts[v + 5] = uvs[u + 1];
+						}
+					} else {
+						for (let v = 2, u = 0, n = numFloats; v < n; v += vertexSize, u += 2) {
+							verts[v] = color.r;
+							verts[v + 1] = color.g;
+							verts[v + 2] = color.b;
+							verts[v + 3] = color.a;
+							verts[v + 4] = uvs[u];
+							verts[v + 5] = uvs[u + 1];
+							verts[v + 6] = darkColor.r;
+							verts[v + 7] = darkColor.g;
+							verts[v + 8] = darkColor.b;
+							verts[v + 9] = darkColor.a;
+						}
 					}
+
 					finalVertices = vertices;
 					finalVerticesLength = numFloats;
 					finalIndices = triangles;
@@ -304,7 +338,7 @@ export class SkeletonMesh extends THREE.Object3D {
 				// Start new batch if this one can't hold vertices/indices
 				if (
 					!batch.canBatch(
-						finalVerticesLength / SkeletonMesh.VERTEX_SIZE,
+						finalVerticesLength / this.vertexSize,
 						finalIndicesLength
 					)
 				) {

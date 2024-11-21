@@ -40,6 +40,7 @@ export class ThreeJsTexture extends Texture {
 		else
 			this.texture = new THREE.Texture(image);
 		// if the texture is not pma, we ask to threejs to premultiply on upload
+		console.log(pma);
 		this.texture.premultiplyAlpha = !pma;
 		this.texture.flipY = false;
 
