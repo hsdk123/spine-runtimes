@@ -32,5 +32,11 @@
   "homepage": "https://github.com/esotericsoftware/spine-runtimes#readme",
   "dependencies": {
     "@esotericsoftware/spine-core": "4.2.66"
+  },
+  "devDependencies": {
+    "@types/three": "^0.159.0"
+  },
+  "peerDependencies": {
+    "three": "^0.159.0"
   }
 }
