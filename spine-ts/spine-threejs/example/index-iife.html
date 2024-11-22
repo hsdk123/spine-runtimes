@@ -2,43 +2,33 @@
   <head>
     <meta charset="UTF-8" />
     <title>spine-threejs</title>
-    <style>
-      * {
-        margin: 0;
-        padding: 0;
-      }
-
-      body,
-      html {
-        height: 100%;
-      }
-
-      canvas {
-        position: absolute;
-        width: 100%;
-        height: 100%;
-      }
-    </style>
-
-    <script type="importmap">
-    {
-        "imports": {
-            "three": "https://cdn.jsdelivr.net/npm/three@0.159.0/build/three.module.js",
-            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.159.0/examples/jsm/",
-            "spine-threejs": "../dist/iife/spine-threejs.esm.js"
-        }
-    }
-    </script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.159.0/build/three.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="../dist/iife/spine-threejs.js"></script>
   </head>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+    }
+
+    body,
+    html {
+      height: 100%;
+    }
+
+    canvas {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
 
   <body>
-    <script type="module">
-      import * as THREE from "three";
-      import * as spine from "spine-threejs";
-      import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-
-      let scene, camera, renderer;
-        let geometry, material, mesh, skeletonMesh, atlas, atlasLoader;
+    <script>
+      (function () {
+        let scene, camera, renderer;
+        let geometry, material, mesh, atlas, atlasLoader, skeletonMesh;
         let assetManager;
         let canvas;
         let controls;
@@ -60,11 +50,11 @@
           camera.position.y = 100;
           camera.position.z = 400;
           scene = new THREE.Scene();
-          renderer = new THREE.WebGLRenderer({ logarithmicDepthBuffer: true });
+          renderer = new THREE.WebGLRenderer();
           renderer.setSize(width, height);
           document.body.appendChild(renderer.domElement);
           canvas = renderer.domElement;
-          controls = new OrbitControls(camera, renderer.domElement);
+          controls = new THREE.OrbitControls(camera, renderer.domElement);
 
           // load the assets required to display the Raptor model
           assetManager = new spine.AssetManager(baseUrl);
@@ -102,48 +92,12 @@
             );
 
             // Create a SkeletonMesh from the data and attach it to the scene
-            // Provide a custom vertex/fragment shader pair that supports
-            // the logarithmic depth buffer.
-            // See https://discourse.threejs.org/t/shadermaterial-render-order-with-logarithmicdepthbuffer-is-wrong/49221/3
             skeletonMesh = new spine.SkeletonMesh(
               skeletonData,
-              (materialParameters) => {
-                materialParameters.vertexShader = `
-                attribute vec4 color;
-                varying vec2 vUv;
-                varying vec4 vColor;
-
-                #include <common>
-                #include <logdepthbuf_pars_vertex>
-
-                void main() {
-                  vUv = uv;
-                  vColor = color;
-                  gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0);
-                  #include <logdepthbuf_vertex>
-                }
-                `;
-
-                materialParameters.fragmentShader = `
-                uniform sampler2D map;
-                #ifdef USE_SPINE_ALPHATEST
-                uniform float alphaTest;
-                #endif
-                varying vec2 vUv;
-                varying vec4 vColor;
-
-                #include <common>
-                #include <logdepthbuf_pars_fragment>
-
-                void main(void) {
-                  #include <logdepthbuf_fragment>
-
-                  gl_FragColor = texture2D(map, vUv)*vColor;
-                  #ifdef USE_SPINE_ALPHATEST
-                  if (gl_FragColor.a < alphaTest) discard;
-                  #endif
-                }
-                `;
+              (parameters) => {
+                parameters.depthTest = true;
+                parameters.depthWrite = true;
+                parameters.alphaTest = 0.001;
               }
             );
             skeletonMesh.state.setAnimation(0, animation, true);
@@ -190,7 +144,7 @@
         }
 
         init();
-
+      })();
     </script>
   </body>
 </html>
