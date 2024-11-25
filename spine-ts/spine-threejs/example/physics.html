@@ -44,7 +44,7 @@
       let controls;
       let lastFrameTime = Date.now() / 1000;
 
-      let pma = false;
+      let pma = true;
       let baseUrl = "assets/";
       let skeletonFile = "celestial-circus-pro.json";
       let atlasFile = `celestial-circus${pma ? "-pma" : ""}.atlas`;
@@ -98,20 +98,26 @@
             assetManager.require(skeletonFile)
           );
 
-          // Create a SkeletonMesh from the data and attach it to the scene
-          skeletonMesh = new spine.SkeletonMesh(
-            skeletonData,
-            (parameters) => {
-              parameters.depthTest = true;
-              parameters.depthWrite = true;
-              parameters.alphaTest = 0.001;
-            }
-          );
-          skeletonMesh.state.setAnimation(0, "swing", true);
-          skeletonMesh.state.setAnimation(1, "eyeblink-long", true);
-          mesh.add(skeletonMesh);
+            // Create a SkeletonMesh from the data and attach it to the scene
+            skeletonMesh = new spine.SkeletonMesh({
+              skeletonData,
+              materialFactory: (parameters) => {
+                return new THREE.MeshBasicMaterial({
+                  ...parameters,
+                  // transparent: true,
+                  // depthWrite: true,
+                  // depthTest: true,
+                  // alphaTest: 0.001,
+                  // vertexColors: true,
+                });
+              },
+              twoColorTint: false,
+            });
+            skeletonMesh.state.setAnimation(0, "swing", true);
+            skeletonMesh.state.setAnimation(1, "eyeblink-long", true);
+            mesh.add(skeletonMesh);
 
-          skeletonMesh.position.y = -300;
+          skeletonMesh.position.y = -200;
 
           requestAnimationFrame(render);
         } else requestAnimationFrame(load);

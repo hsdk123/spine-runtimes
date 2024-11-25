@@ -53,16 +53,19 @@ type SkeletonMeshConfiguration = {
 	skeletonData: SkeletonData,
 	materialFactory?: (parameters: THREE.MaterialParameters) => Material,
 	twoColorTint?: boolean,
+	premultipliedAlpha?: boolean,
 };
 
 export class SkeletonMesh extends THREE.Object3D {
+	// public static readonly DEFAULT_MATERIAL_PARAMETERS: THREE.MaterialParameters = {
 	public static readonly DEFAULT_MATERIAL_PARAMETERS: THREE.MaterialParameters = {
 		side: THREE.DoubleSide,
-		transparent: true,
 		depthWrite: true,
+		depthTest: true,
+		transparent: true,
 		alphaTest: 0.001,
-		premultipliedAlpha: false,
 		vertexColors: true,
+		premultipliedAlpha: true,
 	}
 
 	tempPos: Vector2 = new Vector2();
@@ -81,7 +84,7 @@ export class SkeletonMesh extends THREE.Object3D {
 	static QUAD_TRIANGLES = [0, 1, 2, 2, 3, 0];
 	static VERTEX_SIZE = 2 + 2 + 4;
 	private vertexSize = 2 + 2 + 4;
-	private twoColorTint = true;
+	private twoColorTint;
 
 	private vertices = Utils.newFloatArray(1024);
 	private tempColor = new Color();
@@ -269,12 +272,12 @@ export class SkeletonMesh extends THREE.Object3D {
 
 				let darkColor = this.tempDarkColor;
 				if (!slot.darkColor)
-					darkColor.set(0, 0, 0, 1.0);
+					darkColor.set(1, 1, 1, 0);
 				else {
-					darkColor.r = slot.darkColor.r * color.a;
-					darkColor.g = slot.darkColor.g * color.a;
-					darkColor.b = slot.darkColor.b * color.a;
-					darkColor.a = 1.0;
+					darkColor.r = slot.darkColor.r * alpha;
+					darkColor.g = slot.darkColor.g * alpha;
+					darkColor.b = slot.darkColor.b * alpha;
+					darkColor.a = 1;
 				}
 
 				let finalVertices: NumberArrayLike;

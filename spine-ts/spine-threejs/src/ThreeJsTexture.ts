@@ -40,12 +40,11 @@ export class ThreeJsTexture extends Texture {
 		else
 			this.texture = new THREE.Texture(image);
 		// if the texture is not pma, we ask to threejs to premultiply on upload
-		console.log(pma);
 		this.texture.premultiplyAlpha = !pma;
 		this.texture.flipY = false;
 
-		// this is necessary in future versions of ThreeJS
-		this.texture.colorSpace = THREE.SRGBColorSpace;
+		// Keep this as a reference - this is necessary in future versions of ThreeJS
+		// this.texture.colorSpace = THREE.SRGBColorSpace;
 
 		this.texture.needsUpdate = true;
 	}
@@ -91,9 +90,11 @@ export class ThreeJsTexture extends Texture {
 		else throw new Error("Unknown texture wrap: " + wrap);
 	}
 
+	static fist = true;
 	static toThreeJsBlending (blend: BlendMode): ThreeBlendOptions {
 		if (blend === BlendMode.Normal) return { blending: THREE.NormalBlending };
 		else if (blend === BlendMode.Additive) return { blending: THREE.AdditiveBlending };
+		// else if (blend === BlendMode.Multiply) return { blending: THREE.NormalBlending };
 		else if (blend === BlendMode.Multiply) return {
 			blending: THREE.CustomBlending,
 			blendSrc: THREE.DstColorFactor,

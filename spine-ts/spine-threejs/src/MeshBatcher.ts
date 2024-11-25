@@ -38,7 +38,6 @@ export class MeshBatcher extends THREE.Mesh {
 	public static MAX_VERTICES = 10920;
 
 	// private static VERTEX_SIZE = 9;
-	private static VERTEX_SIZE = 13;
 	private vertexSize = 9;
 	private vertexBuffer: THREE.InterleavedBuffer;
 	private vertices: Float32Array;
@@ -56,7 +55,7 @@ export class MeshBatcher extends THREE.Mesh {
 		if (maxVertices > MeshBatcher.MAX_VERTICES) throw new Error("Can't have more than 10920 triangles per batch: " + maxVertices);
 
 		if (twoColorTint) {
-			this.vertexSize += 4;
+			this.vertexSize += 3;
 		}
 
 		let vertices = this.vertices = new Float32Array(maxVertices * this.vertexSize);
@@ -68,7 +67,7 @@ export class MeshBatcher extends THREE.Mesh {
 		geo.setAttribute("color", new THREE.InterleavedBufferAttribute(vertexBuffer, 4, 3, false));
 		geo.setAttribute("uv", new THREE.InterleavedBufferAttribute(vertexBuffer, 2, 7, false));
 		if (twoColorTint) {
-			geo.setAttribute("darkcolor", new THREE.InterleavedBufferAttribute(vertexBuffer, 4, 9, false));
+			geo.setAttribute("darkcolor", new THREE.InterleavedBufferAttribute(vertexBuffer, 3, 9, false));
 		}
 		geo.setIndex(new THREE.BufferAttribute(indices, 1));
 		geo.getIndex()!.usage = WebGLRenderingContext.DYNAMIC_DRAW;
@@ -141,16 +140,10 @@ export class MeshBatcher extends THREE.Mesh {
 				vertexBuffer[i++] = vertices[j++];  // u
 				vertexBuffer[i++] = vertices[j++];  // v
 
-				vertexBuffer[i++] = vertices[j++];  // r
-				vertexBuffer[i-1] = 1;
-				vertexBuffer[i++] = vertices[j++];  // g
-				vertexBuffer[i-1] = 1;
-				vertexBuffer[i++] = vertices[j++];  // b
-				vertexBuffer[i-1] = 1;
-				vertexBuffer[i++] = vertices[j++];  // a
-				vertexBuffer[i-1] = 1;
-
-
+				vertexBuffer[i++] = vertices[j++];  // dark r
+				vertexBuffer[i++] = vertices[j++];  // dark g
+				vertexBuffer[i++] = vertices[j++];  // dark b
+				j++;
 			}
 		} else {
 			for (; j < verticesLength;) {
@@ -233,94 +226,97 @@ export class MeshBatcher extends THREE.Mesh {
 			}
 
 			const meshMaterial = this.materialFactory(SkeletonMesh.DEFAULT_MATERIAL_PARAMETERS);
-			// meshMaterial.premultipliedAlpha = false;
-			console.log(meshMaterial);
 
 			if (!('map' in meshMaterial)) {
 				throw new Error("The material factory must return a material having the map property for the texture.");
 			}
 
 
-			// meshMaterial.onBeforeCompile = ( shader ) => {
+			meshMaterial.onBeforeCompile = ( shader ) => {
 
-			// 	if (this.twoColorTint) {
-			// 		meshMaterial.defines = {
-			// 			...meshMaterial.defines,
-			// 			USE_SPINE_DARK_TINT: 1,
-			// 		}
-			// 	}
-
-			// 	// vec4 texColor = texture2D(u_texture, v_texCoords);
-			// 	// gl_FragColor.a = texColor.a * v_light.a;
-			// 	// gl_FragColor.rgb = ((texColor.a - 1.0) * v_dark.a + 1.0 - texColor.rgb) * v_dark.rgb + texColor.rgb * v_light.rgb;
-
-			// 	shader.vertexShader = "attribute vec4 darkcolor;\n" + shader.vertexShader;
-			// 	shader.vertexShader = shader.vertexShader.replace(
-			// 		'#include <color_pars_vertex>',
-			// 		[
-			// 			"#if defined( USE_COLOR_ALPHA )",
-			// 			"	varying vec4 vColor;",
-			// 			"	varying vec4 v_dark;",
-			// 			"#endif",
-			// 		].join( '\n' )
-			// 	);
-
-			// 	shader.vertexShader = shader.vertexShader.replace(
-			// 		'#include <color_vertex>',
-			// 		[
-			// 			"#if defined( USE_COLOR_ALPHA )",
-			// 			"	vColor = vec4( 1.0 );",
-			// 			"	vColor *= color;",
-			// 			"	v_dark = vec4( 1.0 );",
-			// 			"	v_dark *= darkcolor;",
-			// 			"#endif",
-			// 		].join( '\n' )
-			// 	);
-
-			// 	// console.log(shader.vertexShader);
+				console.log(this.twoColorTint);
+				if (this.twoColorTint) {
+					meshMaterial.defines = {
+						...meshMaterial.defines,
+						USE_SPINE_DARK_TINT: 1,
+					}
+				}
 
 
+				let code;
 
-			// 	shader.fragmentShader = shader.fragmentShader.replace(
-			// 		'#include <color_pars_fragment>',
-			// 		[
-			// 			"#if defined( USE_COLOR_ALPHA )",
-			// 			"	varying vec4 vColor;",
-			// 			"	varying vec4 v_dark;",
-			// 			"#endif",
-			// 		].join( '\n' )
-			// 	);
+				// VERTEX SHADER MODIFICATIONS
 
-			// 	shader.fragmentShader = shader.fragmentShader.replace(
-			// 		'#include <color_fragment>',
-			// 		[
-			// 			"#ifdef USE_SPINE_DARK_TINT",
+				// Add dark color attribute
+				shader.vertexShader = `
+#if defined( USE_SPINE_DARK_TINT )
+	attribute vec3 darkcolor;
+#endif
+` + shader.vertexShader;
 
-			// 			"	#ifdef USE_COLOR_ALPHA",
-			// 			"	        diffuseColor.a *= vColor.a;",
-			// 			"	        diffuseColor.rgb *= ((diffuseColor.a - 1.0) * v_dark.a + 1.0 - diffuseColor.rgb) * v_dark.rgb + diffuseColor.rgb * vColor.rgb;",
-			// 			"	#endif",
+				// Add dark color attribute
+				code = `
+#if defined( USE_SPINE_DARK_TINT )
+	varying vec3 v_dark;
+#endif
+`;
+				shader.vertexShader = insertAfterElementInShader(shader.vertexShader, '#include <color_pars_vertex>', code);
 
-			// 			"#else",
-			// 			"	#ifdef USE_COLOR_ALPHA",
-			// 			"	        diffuseColor *= vColor;",
-			// 			"	#endif",
 
-			// 			"#endif",
-			// 		].join( '\n' )
-			// 	);
+				// Define v_dark varying
+				code = `
+#if defined( USE_SPINE_DARK_TINT )
+	v_dark = vec3( 1.0 );
+	v_dark *= darkcolor;
+#endif
+`;
+				shader.vertexShader = insertAfterElementInShader(shader.vertexShader, '#include <color_vertex>', code);
 
-			// 	// shader.fragmentShader = shader.fragmentShader.replace(
-			// 	// 	'#include <premultiplied_alpha_fragment>',
-			// 	// 	[
-			// 	// 		"#ifdef PREMULTIPLIED_ALPHA",
-			// 	// 		"        gl_FragColor.rgb *= 0.1;",
-			// 	// 		"    #endif",
-			// 	// 	].join( '\n' )
-			// 	// );
-			// 	console.log(shader.fragmentShader);
 
-			// }
+
+
+				// FRAGMENT SHADER MODIFICATIONS
+
+				shader.fragmentShader = shader.fragmentShader.replace(
+					'#include <color_pars_fragment>',
+`
+#if defined( USE_COLOR_ALPHA )
+	varying vec4 vColor;
+	#ifdef USE_COLOR_ALPHA
+		varying vec3 v_dark;
+	#endif
+#endif
+`);
+
+				shader.fragmentShader = shader.fragmentShader.replace(
+					'#include <color_fragment>',
+`
+#ifdef USE_SPINE_DARK_TINT
+	#ifdef USE_COLOR_ALPHA
+	        diffuseColor.a *= vColor.a;
+	        diffuseColor.rgb *= (1.0 - diffuseColor.rgb) * v_dark.rgb + diffuseColor.rgb * vColor.rgb;
+	#endif
+#else
+	#ifdef USE_COLOR_ALPHA
+	        diffuseColor *= vColor;
+	#endif
+#endif
+`);
+
+// We had to remove this because we need premultiplied blending modes, but our textures are already premultiplied
+// We could actually create a custom blending mode for Normal and Additive too
+shader.fragmentShader = shader.fragmentShader.replace('#include <premultiplied_alpha_fragment>', '');
+
+// We had to remove this (and don't assign a color space to the texture) otherwise we would see artifacts on texture edges
+shader.fragmentShader = shader.fragmentShader.replace('#include <colorspace_fragment>', '');
+
+
+
+
+
+console.log(shader.fragmentShader);
+
+			}
 
 
 			updateMeshMaterial(meshMaterial as MaterialWithMap, slotTexture, blendingObject);
@@ -332,6 +328,13 @@ export class MeshBatcher extends THREE.Mesh {
 
 		return group;
 	}
+}
+
+function insertAfterElementInShader(shader: string, elementToFind: string, codeToInsert: string) {
+	const index = shader.indexOf(elementToFind);
+	const beforeToken = shader.slice(0, index + elementToFind.length);
+	const afterToken = shader.slice(index + elementToFind.length);
+	return beforeToken + codeToInsert + afterToken;
 }
 
 function updateMeshMaterial (meshMaterial: MaterialWithMap, slotTexture: THREE.Texture, blending: ThreeBlendOptions) {
