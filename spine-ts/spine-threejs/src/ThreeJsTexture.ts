@@ -46,8 +46,8 @@ export class ThreeJsTexture extends Texture {
 	}
 
 	setFilters (minFilter: TextureFilter, magFilter: TextureFilter) {
-		this.texture.minFilter = ThreeJsTexture.toThreeJsTextureFilter(minFilter);
-		this.texture.magFilter = ThreeJsTexture.toThreeJsTextureFilter(magFilter);
+		this.texture.minFilter = ThreeJsTexture.toThreeJsMinificationTextureFilter(minFilter);
+		this.texture.magFilter = ThreeJsTexture.toThreeJsMagnificationTextureFilter(magFilter);
 	}
 
 	setWraps (uWrap: TextureWrap, vWrap: TextureWrap) {
@@ -59,12 +59,22 @@ export class ThreeJsTexture extends Texture {
 		this.texture.dispose();
 	}
 
-	static toThreeJsTextureFilter (filter: TextureFilter) {
+	static toThreeJsMinificationTextureFilter (filter: TextureFilter): THREE.MinificationTextureFilter {
 		if (filter === TextureFilter.Linear) return THREE.LinearFilter;
 		else if (filter === TextureFilter.MipMap) return THREE.LinearMipMapLinearFilter; // also includes TextureFilter.MipMapLinearLinear
 		else if (filter === TextureFilter.MipMapLinearNearest) return THREE.LinearMipMapNearestFilter;
 		else if (filter === TextureFilter.MipMapNearestLinear) return THREE.NearestMipMapLinearFilter;
 		else if (filter === TextureFilter.MipMapNearestNearest) return THREE.NearestMipMapNearestFilter;
+		else if (filter === TextureFilter.Nearest) return THREE.NearestFilter;
+		else throw new Error("Unknown texture filter: " + filter);
+	}
+
+	static toThreeJsMagnificationTextureFilter (filter: TextureFilter): THREE.MagnificationTextureFilter {
+		if (filter === TextureFilter.Linear) return THREE.LinearFilter;
+		else if (filter === TextureFilter.MipMap) return THREE.LinearFilter;
+		else if (filter === TextureFilter.MipMapLinearNearest) return THREE.NearestFilter;
+		else if (filter === TextureFilter.MipMapNearestLinear) return THREE.LinearFilter;
+		else if (filter === TextureFilter.MipMapNearestNearest) return THREE.NearestFilter;
 		else if (filter === TextureFilter.Nearest) return THREE.NearestFilter;
 		else throw new Error("Unknown texture filter: " + filter);
 	}
