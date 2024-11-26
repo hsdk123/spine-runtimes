@@ -33,7 +33,7 @@ import { ThreeJsTexture, ThreeBlendOptions } from "./ThreeJsTexture.js";
 import { BlendMode } from "@esotericsoftware/spine-core";
 import { SkeletonMesh } from "./SkeletonMesh.js";
 
-type MaterialWithMap = THREE.Material & { map: THREE.Texture | null };
+export type MaterialWithMap = THREE.Material & { map: THREE.Texture | null };
 export class MeshBatcher extends THREE.Mesh {
 	public static MAX_VERTICES = 10920;
 
@@ -48,10 +48,11 @@ export class MeshBatcher extends THREE.Mesh {
 
 	constructor (
 			maxVertices: number = MeshBatcher.MAX_VERTICES,
-			private materialFactory: (parameters: THREE.MaterialParameters) => THREE.Material,
+			private materialFactory: (parameters: THREE.MaterialParameters) => MaterialWithMap,
 			private twoColorTint = true,
 		) {
 		super();
+
 		if (maxVertices > MeshBatcher.MAX_VERTICES) throw new Error("Can't have more than 10920 triangles per batch: " + maxVertices);
 
 		if (twoColorTint) {
@@ -225,100 +226,7 @@ export class MeshBatcher extends THREE.Mesh {
 				}
 			}
 
-			const meshMaterial = this.materialFactory(SkeletonMesh.DEFAULT_MATERIAL_PARAMETERS);
-
-			if (!('map' in meshMaterial)) {
-				throw new Error("The material factory must return a material having the map property for the texture.");
-			}
-
-
-			meshMaterial.onBeforeCompile = ( shader ) => {
-
-				console.log(this.twoColorTint);
-				if (this.twoColorTint) {
-					meshMaterial.defines = {
-						...meshMaterial.defines,
-						USE_SPINE_DARK_TINT: 1,
-					}
-				}
-
-
-				let code;
-
-				// VERTEX SHADER MODIFICATIONS
-
-				// Add dark color attribute
-				shader.vertexShader = `
-#if defined( USE_SPINE_DARK_TINT )
-	attribute vec3 darkcolor;
-#endif
-` + shader.vertexShader;
-
-				// Add dark color attribute
-				code = `
-#if defined( USE_SPINE_DARK_TINT )
-	varying vec3 v_dark;
-#endif
-`;
-				shader.vertexShader = insertAfterElementInShader(shader.vertexShader, '#include <color_pars_vertex>', code);
-
-
-				// Define v_dark varying
-				code = `
-#if defined( USE_SPINE_DARK_TINT )
-	v_dark = vec3( 1.0 );
-	v_dark *= darkcolor;
-#endif
-`;
-				shader.vertexShader = insertAfterElementInShader(shader.vertexShader, '#include <color_vertex>', code);
-
-
-
-
-				// FRAGMENT SHADER MODIFICATIONS
-
-				shader.fragmentShader = shader.fragmentShader.replace(
-					'#include <color_pars_fragment>',
-`
-#if defined( USE_COLOR_ALPHA )
-	varying vec4 vColor;
-	#ifdef USE_COLOR_ALPHA
-		varying vec3 v_dark;
-	#endif
-#endif
-`);
-
-				shader.fragmentShader = shader.fragmentShader.replace(
-					'#include <color_fragment>',
-`
-#ifdef USE_SPINE_DARK_TINT
-	#ifdef USE_COLOR_ALPHA
-	        diffuseColor.a *= vColor.a;
-	        diffuseColor.rgb *= (1.0 - diffuseColor.rgb) * v_dark.rgb + diffuseColor.rgb * vColor.rgb;
-	#endif
-#else
-	#ifdef USE_COLOR_ALPHA
-	        diffuseColor *= vColor;
-	#endif
-#endif
-`);
-
-// We had to remove this because we need premultiplied blending modes, but our textures are already premultiplied
-// We could actually create a custom blending mode for Normal and Additive too
-shader.fragmentShader = shader.fragmentShader.replace('#include <premultiplied_alpha_fragment>', '');
-
-// We had to remove this (and don't assign a color space to the texture) otherwise we would see artifacts on texture edges
-shader.fragmentShader = shader.fragmentShader.replace('#include <colorspace_fragment>', '');
-
-
-
-
-
-console.log(shader.fragmentShader);
-
-			}
-
-
+			const meshMaterial = this.newMaterial();
 			updateMeshMaterial(meshMaterial as MaterialWithMap, slotTexture, blendingObject);
 			this.material.push(meshMaterial);
 			group = this.material.length - 1;
@@ -328,6 +236,96 @@ console.log(shader.fragmentShader);
 
 		return group;
 	}
+
+	private newMaterial(): MaterialWithMap {
+		const meshMaterial = this.materialFactory(SkeletonMesh.DEFAULT_MATERIAL_PARAMETERS);
+
+		if (!('map' in meshMaterial)) {
+			throw new Error("The material factory must return a material having the map property for the texture.");
+		}
+
+		if (meshMaterial instanceof SkeletonMeshMaterial) {
+			return meshMaterial;
+		}
+
+		if (this.twoColorTint) {
+			meshMaterial.defines = {
+				...meshMaterial.defines,
+				USE_SPINE_DARK_TINT: 1,
+			}
+		}
+
+		meshMaterial.onBeforeCompile = spineOnBeforeCompile;
+
+		return meshMaterial;
+	}
+}
+
+const spineOnBeforeCompile = (shader: THREE.WebGLProgramParametersWithUniforms) => {
+
+	let code;
+
+	// VERTEX SHADER MODIFICATIONS
+
+	// Add dark color attribute
+	shader.vertexShader = `
+		#if defined( USE_SPINE_DARK_TINT )
+			attribute vec3 darkcolor;
+		#endif
+	` + shader.vertexShader;
+
+	// Add dark color attribute
+	code = `
+		#if defined( USE_SPINE_DARK_TINT )
+			varying vec3 v_dark;
+		#endif
+	`;
+	shader.vertexShader = insertAfterElementInShader(shader.vertexShader, '#include <color_pars_vertex>', code);
+
+	// Define v_dark varying
+	code = `
+		#if defined( USE_SPINE_DARK_TINT )
+			v_dark = vec3( 1.0 );
+			v_dark *= darkcolor;
+		#endif
+	`;
+	shader.vertexShader = insertAfterElementInShader(shader.vertexShader, '#include <color_vertex>', code);
+
+
+	// FRAGMENT SHADER MODIFICATIONS
+
+	// Define v_dark varying
+	code = `
+		#ifdef USE_SPINE_DARK_TINT
+			varying vec3 v_dark;
+		#endif
+	`;
+	shader.fragmentShader = insertAfterElementInShader(shader.fragmentShader, '#include <color_pars_fragment>', code);
+
+	// Replacing color_fragment with the addition of dark tint formula if twoColorTint is true
+	shader.fragmentShader = shader.fragmentShader.replace(
+		'#include <color_fragment>',
+		`
+			#ifdef USE_SPINE_DARK_TINT
+				#ifdef USE_COLOR_ALPHA
+						diffuseColor.a *= vColor.a;
+						diffuseColor.rgb *= (1.0 - diffuseColor.rgb) * v_dark.rgb + diffuseColor.rgb * vColor.rgb;
+				#endif
+			#else
+				#ifdef USE_COLOR_ALPHA
+						diffuseColor *= vColor;
+				#endif
+			#endif
+		`
+	);
+
+	// We had to remove this because we need premultiplied blending modes, but our textures are already premultiplied
+	// We could actually create a custom blending mode for Normal and Additive too
+	shader.fragmentShader = shader.fragmentShader.replace('#include <premultiplied_alpha_fragment>', '');
+
+	// We had to remove this (and don't assign a color space to the texture) otherwise we would see artifacts on texture edges
+	shader.fragmentShader = shader.fragmentShader.replace('#include <colorspace_fragment>', '');
+
 }
 
 function insertAfterElementInShader(shader: string, elementToFind: string, codeToInsert: string) {
@@ -341,4 +339,59 @@ function updateMeshMaterial (meshMaterial: MaterialWithMap, slotTexture: THREE.T
 	meshMaterial.map = slotTexture;
 	Object.assign(meshMaterial, blending);
 	meshMaterial.needsUpdate = true;
+}
+
+
+export class SkeletonMeshMaterial extends THREE.ShaderMaterial {
+
+	public get map(): THREE.Texture | null {
+		return this.uniforms.map.value;
+	}
+
+	public set map(value: THREE.Texture | null) {
+		this.uniforms.map.value = value;
+	}
+
+	constructor (parameters: THREE.ShaderMaterialParameters) {
+
+		let vertexShader = `
+			varying vec2 vUv;
+			varying vec4 vColor;
+			void main() {
+				vUv = uv;
+				vColor = color;
+				gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0);
+			}
+		`;
+		let fragmentShader = `
+			uniform sampler2D map;
+			#ifdef USE_SPINE_ALPHATEST
+			uniform float alphaTest;
+			#endif
+			varying vec2 vUv;
+			varying vec4 vColor;
+			void main(void) {
+				gl_FragColor = texture2D(map, vUv)*vColor;
+				#ifdef USE_SPINE_ALPHATEST
+					if (gl_FragColor.a < alphaTest) discard;
+				#endif
+			}
+		`;
+
+		let uniforms = { map: { value: null } };
+		if (parameters.uniforms) {
+			uniforms = { ...parameters.uniforms, ...uniforms };
+		}
+
+		if (parameters.alphaTest && parameters.alphaTest > 0) {
+			parameters.defines = { USE_SPINE_ALPHATEST: 1 };
+		}
+
+		super({
+			vertexShader,
+			fragmentShader,
+			...parameters,
+			uniforms,
+		});
+	}
 }

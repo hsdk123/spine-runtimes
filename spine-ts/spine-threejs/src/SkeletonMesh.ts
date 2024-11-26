@@ -40,20 +40,37 @@ import {
 	Skeleton,
 	SkeletonClipping,
 	SkeletonData,
+	SkeletonBinary,
+	SkeletonJson,
 	Utils,
 	Vector2,
 } from "@esotericsoftware/spine-core";
 
-import { MeshBatcher } from "./MeshBatcher.js";
+import { MaterialWithMap, MeshBatcher } from "./MeshBatcher.js";
 import { ThreeJsTexture } from "./ThreeJsTexture.js";
-import { Material } from "three";
 
 type SkeletonMeshMaterialParametersCustomizer = (materialParameters: THREE.MaterialParameters) => void;
 type SkeletonMeshConfiguration = {
+
+	/** The skeleton data object loaded by using {@link SkeletonJson} or {@link SkeletonBinary} */
 	skeletonData: SkeletonData,
-	materialFactory?: (parameters: THREE.MaterialParameters) => Material,
+
+	/** Set it to true to enable tint black rendering */
 	twoColorTint?: boolean,
-	premultipliedAlpha?: boolean,
+
+	/**
+	 * The function used to create the materials for the meshes composing this Object3D.
+	 * The material used must have the `map` property.
+	 * By default a MeshStandardMaterial is used, so no light and shadows are available.
+	 * Use a MeshStandardMaterial
+	 *
+	 * @param parameters The default parameters with which this function is invoked.
+	 * You should pass this parameters, once personalized, to the costructor of the material you want to use.
+	 * Default values are defined in {@link SkeletonMesh.DEFAULT_MATERIAL_PARAMETERS}.
+	 *
+	 * @returns An instance of the material you want to be used for the meshes of this Object3D. The material must have the `map` property.
+	 */
+	materialFactory?: (parameters: THREE.MaterialParameters) => MaterialWithMap,
 };
 
 export class SkeletonMesh extends THREE.Object3D {
@@ -77,7 +94,7 @@ export class SkeletonMesh extends THREE.Object3D {
 	zOffset: number = 0.1;
 
 	private batches = new Array<MeshBatcher>();
-	private materialFactory: (parameters: THREE.MaterialParameters) => Material;
+	private materialFactory: (parameters: THREE.MaterialParameters) => MaterialWithMap;
 	private nextBatchIndex = 0;
 	private clipper: SkeletonClipping = new SkeletonClipping();
 
@@ -93,12 +110,14 @@ export class SkeletonMesh extends THREE.Object3D {
 	private _castShadow = false;
 	private _receiveShadow = false;
 
+	/**
+	 * Create an Object3D containing meshes representing your Spine animation.
+	 * Personalize your material providing a {@link SkeletonMeshConfiguration}
+	 * @param skeletonData
+	 */
 	constructor (configuration: SkeletonMeshConfiguration)
 	/**
-	 * @deprecated TODO
-	 *
-	 * @param skeletonData
-	 * @param materialCustomizer
+	 * @deprecated This signature is deprecated, please use the one with a single {@link SkeletonMeshConfiguration} parameter
 	 */
 	constructor (
 		skeletonData: SkeletonData,
@@ -126,7 +145,8 @@ export class SkeletonMesh extends THREE.Object3D {
 		if (this.twoColorTint) {
 			this.vertexSize += 4;
 		}
-		this.materialFactory = skeletonDataOrConfiguration.materialFactory ?? (() => new THREE.MeshStandardMaterial(SkeletonMesh.DEFAULT_MATERIAL_PARAMETERS));
+
+		this.materialFactory = skeletonDataOrConfiguration.materialFactory ?? (() => new THREE.MeshBasicMaterial(SkeletonMesh.DEFAULT_MATERIAL_PARAMETERS));
 		this.skeleton = new Skeleton(skeletonDataOrConfiguration.skeletonData);
 		let animData = new AnimationStateData(skeletonDataOrConfiguration.skeletonData);
 		this.state = new AnimationState(animData);

@@ -105,11 +105,10 @@
             // Provide a custom vertex/fragment shader pair that supports
             // the logarithmic depth buffer.
             // See https://discourse.threejs.org/t/shadermaterial-render-order-with-logarithmicdepthbuffer-is-wrong/49221/3
-            skeletonMesh = new spine.SkeletonMesh(
+            skeletonMesh = new spine.SkeletonMesh({
               skeletonData,
-              (materialParameters) => {
+              materialFactory: (materialParameters) => {
                 materialParameters.vertexShader = `
-                attribute vec4 color;
                 varying vec2 vUv;
                 varying vec4 vColor;
 
@@ -140,12 +139,14 @@
 
                   gl_FragColor = texture2D(map, vUv)*vColor;
                   #ifdef USE_SPINE_ALPHATEST
-                  if (gl_FragColor.a < alphaTest) discard;
+                    if (gl_FragColor.a < alphaTest) discard;
                   #endif
                 }
                 `;
+
+                return new spine.SkeletonMeshMaterial(materialParameters);
               }
-            );
+            });
             skeletonMesh.state.setAnimation(0, animation, true);
             mesh.add(skeletonMesh);
 
