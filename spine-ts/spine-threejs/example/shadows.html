@@ -56,8 +56,8 @@
       let atlasFile2 = "celestial-circus.atlas";
       let animation2 = "swing";
 
-      let skeletonFile3 = "coin-tint.json";
-      let atlasFile3 = "coin-tint.atlas";
+      let skeletonFile3 = "coin-pro.json";
+      let atlasFile3 = "coin-pma.atlas";
       let animation3 = "animation";
 
       function init() {
@@ -182,18 +182,6 @@
           skeletonMesh.castShadow = true;
           skeletonMesh.receiveShadow = true;
 
-
-          // Create a SkeletonMesh from the data and attach it to the scene
-          // skeletonMesh2 = new spine.SkeletonMesh(
-          //   skeletonData2,
-          //   (parameters) => {
-          //     // parameters.depthTest = true;
-          //     // parameters.depthWrite = true;
-          //     // parameters.alphaTest = 0.001;
-          //     // parameters.vertexColors = false;
-          //   }
-          // );
-
           skeletonMesh2 = new spine.SkeletonMesh({
             skeletonData: skeletonData2,
             premultipliedAlpha: true,
@@ -219,6 +207,7 @@
           skeletonMesh3 = new spine.SkeletonMesh({
             skeletonData: skeletonData3,
             premultipliedAlpha: true,
+            twoColorTint: true,
             materialFactory: param => {
               param.alphaTest = 0.001;
               param.premultipliedAlpha = true;
@@ -235,6 +224,8 @@
 
           skeletonMesh3.castShadow = true;
           skeletonMesh3.receiveShadow = true;
+
+          skeletonMesh3.update(1.5);
 
           requestAnimationFrame(render);
         } else requestAnimationFrame(load);
