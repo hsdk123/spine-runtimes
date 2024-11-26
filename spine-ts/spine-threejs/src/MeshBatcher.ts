@@ -47,10 +47,10 @@ export class MeshBatcher extends THREE.Mesh {
 	private materialGroups: [number, number, number][] = [];
 
 	constructor (
-			maxVertices: number = MeshBatcher.MAX_VERTICES,
-			private materialFactory: (parameters: THREE.MaterialParameters) => MaterialWithMap,
-			private twoColorTint = true,
-		) {
+		maxVertices: number = MeshBatcher.MAX_VERTICES,
+		private materialFactory: (parameters: THREE.MaterialParameters) => MaterialWithMap,
+		private twoColorTint = true,
+	) {
 		super();
 
 		if (maxVertices > MeshBatcher.MAX_VERTICES) throw new Error("Can't have more than 10920 triangles per batch: " + maxVertices);
@@ -237,7 +237,7 @@ export class MeshBatcher extends THREE.Mesh {
 		return group;
 	}
 
-	private newMaterial(): MaterialWithMap {
+	private newMaterial (): MaterialWithMap {
 		const meshMaterial = this.materialFactory(SkeletonMesh.DEFAULT_MATERIAL_PARAMETERS);
 
 		if (!('map' in meshMaterial)) {
@@ -328,7 +328,7 @@ const spineOnBeforeCompile = (shader: THREE.WebGLProgramParametersWithUniforms) 
 
 }
 
-function insertAfterElementInShader(shader: string, elementToFind: string, codeToInsert: string) {
+function insertAfterElementInShader (shader: string, elementToFind: string, codeToInsert: string) {
 	const index = shader.indexOf(elementToFind);
 	const beforeToken = shader.slice(0, index + elementToFind.length);
 	const afterToken = shader.slice(index + elementToFind.length);
@@ -344,11 +344,11 @@ function updateMeshMaterial (meshMaterial: MaterialWithMap, slotTexture: THREE.T
 
 export class SkeletonMeshMaterial extends THREE.ShaderMaterial {
 
-	public get map(): THREE.Texture | null {
+	public get map (): THREE.Texture | null {
 		return this.uniforms.map.value;
 	}
 
-	public set map(value: THREE.Texture | null) {
+	public set map (value: THREE.Texture | null) {
 		this.uniforms.map.value = value;
 	}
 

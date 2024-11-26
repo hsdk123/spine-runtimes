@@ -152,29 +152,29 @@ export class SkeletonMesh extends THREE.Object3D {
 		this.state = new AnimationState(animData);
 
 		Object.defineProperty(this, 'castShadow', {
-            get: () => this._castShadow,
-            set: (value: boolean) => {
-                this._castShadow = value;
-                this.traverse((child) => {
+			get: () => this._castShadow,
+			set: (value: boolean) => {
+				this._castShadow = value;
+				this.traverse((child) => {
 					if (child instanceof MeshBatcher) {
-                        child.castShadow = value;
+						child.castShadow = value;
 					}
-                });
-            },
-        });
+				});
+			},
+		});
 
 		Object.defineProperty(this, 'receiveShadow', {
-            get: () => this._receiveShadow,
-            set: (value: boolean) => {
-                this._receiveShadow = value;
-                // Propagate to children
-                this.traverse((child) => {
+			get: () => this._receiveShadow,
+			set: (value: boolean) => {
+				this._receiveShadow = value;
+				// Propagate to children
+				this.traverse((child) => {
 					if (child instanceof MeshBatcher) {
-                        child.receiveShadow = value;
+						child.receiveShadow = value;
 					}
-                });
-            },
-        });
+				});
+			},
+		});
 	}
 
 	update (deltaTime: number) {
