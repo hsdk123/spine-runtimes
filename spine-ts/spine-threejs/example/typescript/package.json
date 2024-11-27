@@ -10,7 +10,7 @@
     },
     "dependencies": {
         "@esotericsoftware/spine-threejs": "4.2.67",
-        "three": "0.170.0"
+        "three": "0.162.0"
     },
     "devDependencies": {
         "esbuild": "0.17.17",
