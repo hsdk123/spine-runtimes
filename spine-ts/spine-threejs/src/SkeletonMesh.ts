@@ -206,6 +206,8 @@ export class SkeletonMesh extends THREE.Object3D {
 	private nextBatch () {
 		if (this.batches.length == this.nextBatchIndex) {
 			let batch = new MeshBatcher(MeshBatcher.MAX_VERTICES, this.materialFactory, this.twoColorTint);
+			batch.castShadow = this._castShadow;
+			batch.receiveShadow = this._receiveShadow;
 			this.add(batch);
 			this.batches.push(batch);
 		}
