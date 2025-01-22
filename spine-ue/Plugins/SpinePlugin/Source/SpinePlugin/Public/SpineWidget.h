@@ -167,7 +167,7 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Components|Spine|Skeleton")
 	float GetPhysicsTimeScale();
-	
+
 	UPROPERTY(BlueprintAssignable, Category = "Components|Spine|Skeleton")
 	FSpineWidgetBeforeUpdateWorldTransformDelegate BeforeUpdateWorldTransform;
 

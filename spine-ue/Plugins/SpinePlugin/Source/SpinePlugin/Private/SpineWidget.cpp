@@ -557,4 +557,3 @@ void USpineWidget::SetPhysicsTimeScale(float scale) {
 float USpineWidget::GetPhysicsTimeScale() {
 	return physicsTimeScale;
 }
-
