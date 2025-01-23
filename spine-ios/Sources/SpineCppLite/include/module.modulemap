@@ -1,4 +1,0 @@
-module SpineCppLite {
-    header "spine-cpp-lite.h"
-    export *
-}
