@@ -5,7 +5,7 @@ dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
 pushd "$dir" > /dev/null
 
 if [ $# -lt 2 ] || [ $# -gt 3 ]; then
-    echo "Usage: ./setup-extension.sh <Godot version> <dev:true|false> <mono:true|false>?"
+    echo "Usage: ./setup-extension.sh <Godot version> <dev:true|false>"
     echo
     echo "e.g.:"
     echo "       ./setup-extension.sh 4.2.2-stable true"
@@ -53,17 +53,23 @@ echo "cpus: $cpus"
 pushd ..
 
 rm -rf godot-cpp
-git clone $godot_cpp_repo
-pushd godot-cpp
-git checkout $godot_cpp_branch
-popd
+git clone --depth 1 $godot_cpp_repo -b $godot_cpp_branch
 
-rm -rf godot
-git clone $godot_repo
-pushd godot
-git checkout $godot_branch
-scons target=editor dev_build=true optimize=debug --jobs=$cpus
-popd
+rm -rf example-v4-extension/bin
+mkdir -p example-v4-extension/bin
+
+if [ $dev == "true" ]; then
+    echo "Dev build, creating godot-cpp/dev"
+    touch godot-cpp/dev
+    rm -rf godot
+    git clone --depth 1 $godot_repo -b $godot_branch
+    pushd godot
+    scons target=editor dev_build=true optimize=debug --jobs=$cpus
+    popd
+    cp spine_godot_extension.dev.gdextension example-v4-extension/bin/spine_godot_extension.gdextension
+else
+    cp spine_godot_extension.gdextension example-v4-extension/bin
+fi
 
 cp -r ../spine-cpp/spine-cpp spine_godot
 

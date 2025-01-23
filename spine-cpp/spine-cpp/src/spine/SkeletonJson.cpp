@@ -1175,6 +1175,7 @@ Animation *SkeletonJson::readAnimation(Json *root, SkeletonData *skeletonData) {
 					timeline->setFrame(frame, time, inherit);
 					nextMap = keyMap->_next;
 					if (!nextMap) break;
+					keyMap = nextMap;
 				}
 				timelines.add(timeline);
 			} else {
